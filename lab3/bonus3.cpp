@@ -11,6 +11,7 @@
 #include <thread>
 #include <string>
 #include <iostream>
+#include <termios.h>
 
 using namespace std;
 
@@ -60,7 +61,7 @@ int screenshot_cnt = 0;
 void screenshot(cv::Mat& frame) {
 
     string filename = "/run/media/mmcblk1p1/screenshot/" + to_string(screenshot_cnt++) + ".bmp";
-    
+
     // https://docs.opencv.org/3.4/d4/da8/group__imgcodecs.html#gabbc7ef1aa2edfaa87772f1202d67e0ce
     if (cv::imwrite(filename, frame))
         cout << "Screenshot : " << filename << '\n';
@@ -99,6 +100,45 @@ void listen_keyboard_opencv() {
     }
 
     cv::destroyAllWindows();
+}
+
+void listen_keyboard_terminal() {
+
+    struct termios old_tio, new_tio;
+    // current terminal setting
+    tcgetattr(STDIN_FILENO, &old_tio);
+    new_tio = old_tio;
+
+    // disable enter to flush stdin
+    new_tio.c_lflag &= (~ICANON);
+
+    tcflush(STDIN_FILENO, TCIFLUSH);
+    tcsetattr(STDIN_FILENO, TCSANOW, &new_tio);
+
+    cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
+
+    while (1) {
+
+        int key;
+        if (read(STDIN_FILENO, &key, 1) == 1) {
+            cout << key << '\n';
+        }
+        
+        if (key == 'c') {
+            mutex_screenshot.lock();
+            flag_screenshot = 1;
+            mutex_screenshot.unlock();
+        }
+        else if (key == 27) {
+            mutex_end.lock();
+            flag_end = 1;
+            mutex_end.unlock();
+            break;
+        }
+    }
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &old_tio);
+
 }
 
 int print_frame(cv::Mat& frame, std::ofstream& ofs, struct framebuffer_info& fb_info) {
@@ -161,7 +201,7 @@ int main(int argc, char **argv) {
     camera.set(CV_CAP_PROP_FPS, frame_rate);
 
     // bonus
-    thread t_listen(listen_keyboard_opencv);
+    thread t_listen(listen_keyboard_terminal);
 
     // https://docs.opencv.org/3.4/d6/d50/classcv_1_1Size__.html#a45c97e9a4930d73fde11c2acc5f371ac
     cv::Size video_size = cv::Size(frame_width, frame_height);
