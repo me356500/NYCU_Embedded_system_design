@@ -18,6 +18,7 @@ struct framebuffer_info
 {
     uint32_t bits_per_pixel;    // framebuffer depth
     uint32_t xres_virtual;      // how many pixel in a row in virtual screen
+    uint32_t yres_virtual;      // how many pixel in a column in virtual screen
 };
 
 struct framebuffer_info get_framebuffer_info(const char* framebuffer_device_path) {
@@ -41,6 +42,7 @@ struct framebuffer_info get_framebuffer_info(const char* framebuffer_device_path
     */
     else if (!ioctl(fd, FBIOGET_VSCREENINFO, &screen_info)) {
         info.xres_virtual = screen_info.xres_virtual;
+        info.yres_virtual = screen_info.yres_virtual;
         info.bits_per_pixel = screen_info.bits_per_pixel;
     }
     
