@@ -46,34 +46,45 @@ struct framebuffer_info get_framebuffer_info(const char* framebuffer_device_path
     
     return info;
 };
-//cv::COLOR_BGRA2BGR565
 
-int main(int argc, char ** argv) {
+int print_image(const string &filename, std::ofstream& ofs, struct framebuffer_info& fb_info) {
+
     cv::Mat image;
-    cv::Size2f image_size;
-    
-    framebuffer_info fb_info = get_framebuffer_info("/dev/fb0");
-    std::ofstream ofs("/dev/fb0");
+    cv::Size2f img_size;
+
+    // imread(filename, flags) COLOR, GRAYSCALE,UNCHANGED
+    image = cv::imread(filename, cv::IMREAD_COLOR);
+
+    // opencv mat size
+    image_size = image.size();
 
     int fb_width = fb_info.xres_virtual;
     int fb_depth = fb_info.bits_per_pixel;
     int pixel_bytes = fb_depth / 8;
 
-    // imread(filename, flags) COLOR, GRAYSCALE,UNCHANGED
-    image = cv::imread("sample.bmp", IMREAD_COLOR);
-
-    // opencv mat size
-    image_size = img.size();
-
-
     // cvtColor(src_img, dst_img, coversion code)
     // https://docs.opencv.org/3.4.7/d8/d01/group__imgproc__color__conversions.html#ga4e0972be5de079fed4e3a10e24ef5ef0
-    
     cv::Mat image_convert;
 
-    // BGRA to BGR565 (16-bit image)
-    // PNG compression, using BGRA
-    cv::cvtColor(image, image_convert, cv::COLOR_BGRA2BGR565);
+    int cvtcode;
+    
+    switch (filename.substr(filename.size() - 3)) {
+
+        case "bmp":
+            cvtcode = cv::COLOR_BGR2BGR565;
+            break;
+
+        case "png":
+            cvtcode = cv::COLOR_BGRA2BGR565;
+            break;
+
+        default:
+            break;
+    }
+
+    // BGR to BGR565 (16-bit image)
+    // bmp : no compression using BGR
+    cv::cvtColor(image, image_convert, cvtcode);
 
     // https://docs.opencv.org/3.4.7/d3/d63/classcv_1_1Mat.html#a13acd320291229615ef15f96ff1ff738
 
@@ -86,6 +97,15 @@ int main(int argc, char ** argv) {
     }    
 
     return 0;
+}
 
 
+int main(int argc, char ** argv) {
+
+    framebuffer_info fb_info = get_framebuffer_info("/dev/fb0");
+    std::ofstream ofs("/dev/fb0");
+
+    print_image(string(argv[1]), ofs, fb_info);
+    
+    return 0;
 }

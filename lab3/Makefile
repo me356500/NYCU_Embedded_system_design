@@ -1,5 +1,5 @@
 all:
-	arm-linux-gnueabihf-g++ lab2.cpp -o lab2 \
+	arm-linux-gnueabihf-g++ lab3.cpp -o lab3 \
 -I /opt/EmbedSky/gcc-linaro-5.3-2016.02-x86_64_arm-linux-gnueabihf/include/ \
 -I /usr/local/arm-opencv/install/include/ -L /usr/local/arm-opencv/install/lib/ \
 -Wl,-rpath-link=/opt/EmbedSky/gcc-linaro-5.3-2016.02-x86_64_arm-linux-gnueabihf/arm-linux-gnueabihf/libc/lib/ \
