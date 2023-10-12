@@ -69,18 +69,13 @@ int print_image(const string &filename, std::ofstream& ofs, struct framebuffer_i
 
     int cvtcode;
     
-    switch (filename.substr(filename.size() - 3)) {
+    if (filename.substr(filename.size() - 3) == "bmp") {
 
-        case "bmp":
-            cvtcode = cv::COLOR_BGR2BGR565;
-            break;
+        cvtcode = cv::COLOR_BGR2BGR565;
+    }
+    else {
 
-        case "png":
-            cvtcode = cv::COLOR_BGRA2BGR565;
-            break;
-
-        default:
-            break;
+        cvtcode = cv::COLOR_BGRA2BGR565;
     }
 
     // BGR to BGR565 (16-bit image)
@@ -111,7 +106,7 @@ int main(int argc, char ** argv) {
     int pixel_bytes = fb_depth / 8;
 
     // imread(filename, flags) COLOR, GRAYSCALE,UNCHANGED
-    image = cv::imread("sample.bmp", cv::IMREAD_COLOR);
+    image = cv::imread(argv[1], cv::IMREAD_COLOR);
 
     // opencv mat size
     image_size = image.size();

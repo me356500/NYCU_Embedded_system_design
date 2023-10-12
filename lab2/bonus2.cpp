@@ -70,19 +70,15 @@ int print_image(const string &filename, std::ofstream& ofs, struct framebuffer_i
 
     int cvtcode;
     
-    switch (filename.substr(filename.size() - 3)) {
+    if (filename.substr(filename.size() - 3) == "bmp") {
 
-        case "bmp":
-            cvtcode = cv::COLOR_BGR2BGR565;
-            break;
-
-        case "png":
-            cvtcode = cv::COLOR_BGRA2BGR565;
-            break;
-
-        default:
-            break;
+        cvtcode = cv::COLOR_BGR2BGR565;
     }
+    else {
+        
+        cvtcode = cv::COLOR_BGRA2BGR565;
+    }
+
 
     // BGR to BGR565 (16-bit image)
     // bmp : no compression using BGR
