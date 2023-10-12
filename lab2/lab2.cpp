@@ -51,14 +51,10 @@ struct framebuffer_info get_framebuffer_info(const char* framebuffer_device_path
 int print_image(const string &filename, std::ofstream& ofs, struct framebuffer_info& fb_info) {
 
     cv::Mat image;
-    cv::Size2f img_size;
+    cv::Size2f image_size;
 
     // imread(filename, flags) COLOR, GRAYSCALE,UNCHANGED
-    image = cv::imread(filename, cv::IMREAD_COLOR);
-
-    // opencv mat size
-    image_size = image.size();
-
+    
     int fb_width = fb_info.xres_virtual;
     int fb_depth = fb_info.bits_per_pixel;
     int pixel_bytes = fb_depth / 8;
@@ -70,13 +66,19 @@ int print_image(const string &filename, std::ofstream& ofs, struct framebuffer_i
     int cvtcode;
     
     if (filename.substr(filename.size() - 3) == "bmp") {
-
+        image = cv::imread(filename, cv::IMREAD_COLOR);
         cvtcode = cv::COLOR_BGR2BGR565;
     }
     else {
-
+        cout << "png\n";
+        image = cv::imread(filename, cv::IMREAD_UNCHANGED);
         cvtcode = cv::COLOR_BGRA2BGR565;
     }
+    
+
+    // opencv mat size
+    image_size = image.size();
+    cout << "img size : " << image_size << '\n';
 
     // BGR to BGR565 (16-bit image)
     // bmp : no compression using BGR
@@ -100,10 +102,13 @@ int main(int argc, char ** argv) {
     
     framebuffer_info fb_info = get_framebuffer_info("/dev/fb0");
     std::ofstream ofs("/dev/fb0");
-
+    cout << argv[1] << '\n';
+    print_image(argv[1], ofs, fb_info);
+    /*
     int fb_width = fb_info.xres_virtual;
     int fb_depth = fb_info.bits_per_pixel;
     int pixel_bytes = fb_depth / 8;
+
 
     // imread(filename, flags) COLOR, GRAYSCALE,UNCHANGED
     image = cv::imread(argv[1], cv::IMREAD_COLOR);
@@ -130,7 +135,7 @@ int main(int argc, char ** argv) {
         // reinterpret : uchar* to char*
         ofs.write(reinterpret_cast<char*>(image_convert.ptr(i)), pixel_bytes * image_size.width);
     }    
-
+    */
     return 0;
 
 
