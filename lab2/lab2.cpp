@@ -104,39 +104,6 @@ int main(int argc, char ** argv) {
     std::ofstream ofs("/dev/fb0");
     cout << argv[1] << '\n';
     print_image(argv[1], ofs, fb_info);
-    /*
-    int fb_width = fb_info.xres_virtual;
-    int fb_depth = fb_info.bits_per_pixel;
-    int pixel_bytes = fb_depth / 8;
-
-
-    // imread(filename, flags) COLOR, GRAYSCALE,UNCHANGED
-    image = cv::imread(argv[1], cv::IMREAD_COLOR);
-
-    // opencv mat size
-    image_size = image.size();
-
-
-    // cvtColor(src_img, dst_img, coversion code)
-    // https://docs.opencv.org/3.4.7/d8/d01/group__imgproc__color__conversions.html#ga4e0972be5de079fed4e3a10e24ef5ef0
     
-    cv::Mat image_convert;
-
-    // BGR to BGR565 (16-bit image)
-    // bmp : no compression using BGR
-    cv::cvtColor(image, image_convert, cv::COLOR_BGR2BGR565);
-
-    // https://docs.opencv.org/3.4.7/d3/d63/classcv_1_1Mat.html#a13acd320291229615ef15f96ff1ff738
-
-    for (int i = 0; i < image_size.height; ++i) {
-        // move ofs to ith row of framebuffer
-        ofs.seekp(i * pixel_bytes * fb_width);
-        // writing row by row
-        // reinterpret : uchar* to char*
-        ofs.write(reinterpret_cast<char*>(image_convert.ptr(i)), pixel_bytes * image_size.width);
-    }    
-    */
     return 0;
-
-
 }

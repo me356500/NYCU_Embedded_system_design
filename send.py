@@ -22,4 +22,4 @@ with open(file_name, "rb") as fp:
         tty.write(byte)
         byte = fp.read(1)
         tty.flush()
-        time.sleep(0.0001)
+        time.sleep(0.00001)

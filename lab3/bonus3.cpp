@@ -5,6 +5,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <sys/ioctl.h>
+#include <unistd.h>
 #include <opencv2/core/core_c.h>
 
 #include <mutex>
@@ -78,11 +79,10 @@ void listen_keyboard_opencv() {
     cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
 
     // https://docs.opencv.org/4.x/d7/dfc/group__highgui.html
-    // 
     cv::namedWindow("Listen keyboard Window",cv::WINDOW_AUTOSIZE);
 
     while (1) {
-        // default wait infinte time, get ascii code
+        // polling wait, get ascii code
         int key = cv::waitKey();
         cout << key << '\n';
 
@@ -104,22 +104,24 @@ void listen_keyboard_opencv() {
 
 void listen_keyboard_terminal() {
 
+    cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
+
+    // https://man7.org/linux/man-pages/man3/termios.3.html
+    // termios noncanonical mode
     struct termios old_tio, new_tio;
-    // current terminal setting
+
     tcgetattr(STDIN_FILENO, &old_tio);
     new_tio = old_tio;
 
-    // disable enter to flush stdin
+    // disable canonical
     new_tio.c_lflag &= (~ICANON);
 
     tcflush(STDIN_FILENO, TCIFLUSH);
     tcsetattr(STDIN_FILENO, TCSANOW, &new_tio);
 
-    cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
-
     while (1) {
 
-        int key;
+        int key = ' ';
         if (read(STDIN_FILENO, &key, 1) == 1) {
             cout << key << '\n';
         }
@@ -171,6 +173,7 @@ int main(int argc, char **argv) {
     // open video stream device
     // https://docs.opencv.org/3.4.7/d8/dfe/classcv_1_1VideoCapture.html#a5d5f5dacb77bbebdcbfb341e3d4355c1
     // camera id ??
+    // camera_id + domain_offset (CAP_*) id of the video capturing device to open.
     cv::VideoCapture camera (2);
 
     // get info of the framebuffer
@@ -201,14 +204,25 @@ int main(int argc, char **argv) {
     camera.set(CV_CAP_PROP_FPS, frame_rate);
 
     // bonus
-    thread t_listen(listen_keyboard_terminal);
+    thread t_listen;
+
+    /*
+        0 : opencv listen
+        1 : terminal listen
+    */
+    if (argv[1][0] == '0') {
+        t_listen = thread(listen_keyboard_opencv);
+    }
+    else {
+        t_listen = thread(listen_keyboard_terminal);
+    }
 
     // https://docs.opencv.org/3.4/d6/d50/classcv_1_1Size__.html#a45c97e9a4930d73fde11c2acc5f371ac
     cv::Size video_size = cv::Size(frame_width, frame_height);
 
     // motion jpeg
     // if MJPG doesn't work, try (*'XVID)
-    int fourcc_code = VideoWriter::fourcc(*'MJPG'); 
+    int fourcc_code = cv::VideoWriter::fourcc('M', 'J', 'P', 'G'); 
 
     // https://docs.opencv.org/3.4/dd/d9e/classcv_1_1VideoWriter.html#af52d129e2430c0287654e7d24e3bbcdc
     // https://docs.opencv.org/3.4/df/d94/samples_2cpp_2videowriter_basic_8cpp-example.html#a5
