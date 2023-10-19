@@ -74,33 +74,6 @@ void screenshot(cv::Mat& frame) {
 mutex mutex_screenshot, mutex_end;
 bool flag_screenshot = 0, flag_end = 0;
 
-void listen_keyboard_opencv() {
-
-    cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
-
-    // https://docs.opencv.org/4.x/d7/dfc/group__highgui.html
-    cv::namedWindow("Listen keyboard Window",cv::WINDOW_AUTOSIZE);
-
-    while (1) {
-        // polling wait, get ascii code
-        int key = cv::waitKey();
-        cout << key << '\n';
-
-        if (key == 'c') {
-            mutex_screenshot.lock();
-            flag_screenshot = 1;
-            mutex_screenshot.unlock();
-        }
-        else if (key == 27) {
-            mutex_end.lock();
-            flag_end = 1;
-            mutex_end.unlock();
-            break;
-        }
-    }
-
-    cv::destroyAllWindows();
-}
 
 void listen_keyboard_terminal() {
 
@@ -146,20 +119,16 @@ void listen_keyboard_terminal() {
 int print_frame(cv::Mat& frame, std::ofstream& ofs, struct framebuffer_info& fb_info) {
 
     cv::Size2f frame_size = frame.size();
-    cv::Mat frame_output;
-
-	cv::cvtColor(frame, frame_output, cv::COLOR_BGR2BGR565);
-
+	
     int fb_width = fb_info.xres_virtual;
-    int fb_depth = fb_info.bits_per_pixel;
-    int pixel_bytes = fb_depth / 8;
+    int pixel_bytes = fb_info.bits_per_pixel / 8;
 
     for (int i = 0; i < frame_size.height; ++i) {
         // move ofs to ith row of framebuffer
         ofs.seekp(i * pixel_bytes * fb_width);
         // writing row by row
         // reinterpret : uchar* to char*
-        ofs.write(reinterpret_cast<char*>(frame_output.ptr(i)), pixel_bytes * frame_size.width);
+        ofs.write(reinterpret_cast<char*>(frame.ptr(i)), pixel_bytes * frame_size.width);
     }    
 
     return 0;
@@ -204,18 +173,7 @@ int main(int argc, char **argv) {
     camera.set(CV_CAP_PROP_FPS, frame_rate);
 
     // bonus
-    thread t_listen;
-
-    /*
-        0 : opencv listen
-        1 : terminal listen
-    */
-    if (argv[1][0] == '0') {
-        t_listen = thread(listen_keyboard_opencv);
-    }
-    else {
-        t_listen = thread(listen_keyboard_terminal);
-    }
+    thread t_listen(listen_keyboard_terminal);
 
     // https://docs.opencv.org/3.4/d6/d50/classcv_1_1Size__.html#a45c97e9a4930d73fde11c2acc5f371ac
     cv::Size video_size = cv::Size(frame_width, frame_height);
@@ -241,6 +199,9 @@ int main(int argc, char **argv) {
         // https://docs.opencv.org/3.4/dd/d9e/classcv_1_1VideoWriter.html#a3115b679d612a6a0b5864a0c88ed4b39
         video.write(frame);
 
+        // convert to image color space
+        cv::cvtColor(frame, frame, cv::COLOR_BGR2BGR565);
+
         if (flag_screenshot) {
             screenshot(frame);
             mutex_screenshot.lock();
@@ -250,13 +211,10 @@ int main(int argc, char **argv) {
 
         if (flag_end) {
             cout << "Program End\n";
-            // wait thread end
             t_listen.join();
             break;
         }
 
-        // BGR 3 channel
-        // 8 bits per pixel
         print_frame(frame, ofs, fb_info);
 
     }

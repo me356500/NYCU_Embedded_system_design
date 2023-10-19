@@ -53,12 +53,29 @@ struct framebuffer_info get_framebuffer_info(const char* framebuffer_device_path
 
 int screenshot_cnt = 0;
 
+int cnt = 0;
+
+
 void screenshot(cv::Mat& frame) {
 
-    string filename = "/run/media/mmcblk1p1/screenshot/" + to_string(screenshot_cnt++) + ".bmp";
+    string filename = "/run/media/mmcblk1p1/screenshot/" + to_string(screenshot_cnt++);
+
+    cv::Mat convert;
+    int cvtcode;
+
+    if (cnt % 3 == 1) {
+        filename += ".bmp";
+        cvtcode = cv::COLOR_BGR5652BGR;
+    }
+    else {
+        filename += ".png";
+        cvtcode = cv::COLOR_BGR5652BGRA;
+    }
+
+    cv::cvtColor(frame, convert, cvtcode);
 
     // https://docs.opencv.org/3.4/d4/da8/group__imgcodecs.html#gabbc7ef1aa2edfaa87772f1202d67e0ce
-    if (cv::imwrite(filename, frame))
+    if (cv::imwrite(filename, convert))
         cout << "Screenshot : " << filename << '\n';
     else 
         cout << "[Error] Screenshot failed : " << filename << '\n';
@@ -67,34 +84,6 @@ void screenshot(cv::Mat& frame) {
 
 mutex mutex_screenshot, mutex_end;
 bool flag_screenshot = 0, flag_end = 0;
-
-void listen_keyboard_opencv() {
-
-    cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
-
-    // https://docs.opencv.org/4.x/d7/dfc/group__highgui.html
-    cv::namedWindow("Listen keyboard Window",cv::WINDOW_AUTOSIZE);
-
-    while (1) {
-        // polling wait, get ascii code
-        int key = cv::waitKey();
-        cout << key << '\n';
-
-        if (key == 'c') {
-            mutex_screenshot.lock();
-            flag_screenshot = 1;
-            mutex_screenshot.unlock();
-        }
-        else if (key == 27) {
-            mutex_end.lock();
-            flag_end = 1;
-            mutex_end.unlock();
-            break;
-        }
-    }
-
-    cv::destroyAllWindows();
-}
 
 void listen_keyboard_terminal() {
 
@@ -170,15 +159,6 @@ cv::Mat print_image(const string &filename, std::ofstream& ofs, struct framebuff
 
 int main(int argc, char **argv) {
 
-    /*  Test some features
-        
-        1. HDMI output
-        2. thread screenshot
-        3. getch() screenshot
-        4. video recording
-        5. video scale and frame scale
-    
-    */
     
     cv::Mat frame;
     cv::Size2f image_size;
@@ -201,21 +181,7 @@ int main(int argc, char **argv) {
 
 
     // thread test
-    thread t_listen;
-
-    /*
-        0       : opencv listen
-        1       : terminal listen
-        others  : getch() 
-    */
-
-    if (argv[1][0] == '0') {
-        t_listen = thread(listen_keyboard_opencv);
-    }
-    else if (argv[1][0] == '1') {
-        t_listen = thread(listen_keyboard_terminal);
-    }
-
+    thread t_listen(listen_keyboard_terminal);
 
     cv::Size video_size = cv::Size(frame_width, frame_height);
 
@@ -229,7 +195,7 @@ int main(int argc, char **argv) {
     cv::VideoWriter video("/run/media/mmcblk1p1/video/bonus.avi", fourcc_code, frame_rate, video_size, true);
     
     // input bmp and png alternatively
-    int cnt = 0;
+
     unsigned char c = ' ';
 
     while (1) {
@@ -256,6 +222,12 @@ int main(int argc, char **argv) {
         }
 
         // https://docs.opencv.org/3.4/dd/d9e/classcv_1_1VideoWriter.html#a3115b679d612a6a0b5864a0c88ed4b39
+        cv::Mat video_frame = frame;
+
+        if (cnt % 3 != 1) {
+            cv::cvtColor(frame, video_frame, cv::COLOR_BGRA2BGR);
+        }
+        
         video.write(frame);
 
         if (flag_screenshot) {
@@ -270,21 +242,6 @@ int main(int argc, char **argv) {
             t_listen.join();
             break;
         }
-
-#ifdef NO_THREAD
-
-        c = getch();
-
-        if (c == 'c') {
-            screenshot(frame);
-        }
-
-        if (c == 27) {
-            cout << "Program End\n";
-            break;
-        }
-
-#endif
 
         // display frame
         image_size = frame.size();
