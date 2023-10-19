@@ -7,17 +7,15 @@
 #define MAX_LEN 256
 #define MAX_PLAYLIST 87
 
-typedef struct song song_t;
-
 typedef struct playlist {
     struct list_head *playListHead;
     char name[MAX_LEN];
 } playlist_t;
 
-struct song {
+typedef struct song {
     struct list_head list;
     char name[MAX_LEN];
-};
+} song_t;
 
 const char libpath[] = "songlib";
 playlist_t playlists[MAX_PLAYLIST];
