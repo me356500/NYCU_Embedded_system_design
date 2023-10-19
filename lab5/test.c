@@ -6,7 +6,6 @@
 
 #define MAX_LEN 256
 #define MAX_PLAYLIST 87
-#define MAX_ALL_SONG_NUM 256
 
 typedef struct song song_t;
 
@@ -25,8 +24,6 @@ playlist_t playlists[MAX_PLAYLIST];
 playlist_t curPlaylist;
 song_t *curSong;
 int playListptr = 0;
-
-char allSongs[MAX_ALL_SONG_NUM][MAX_LEN];
 
 void add_playlist(char *name)
 {
@@ -104,6 +101,8 @@ void stop()
 void backward()
 {
     curSong = list_entry(curSong->list.prev, song_t, list);
+    if (curSong == (song_t *)curPlaylist.playListHead)
+        curSong = list_entry(curSong->list.prev, song_t, list);
     stop();
     play(curSong->name);
 }
@@ -111,6 +110,8 @@ void backward()
 void foward()
 {
     curSong = list_entry(curSong->list.next, song_t, list);
+    if (curSong == (song_t *)curPlaylist.playListHead)
+        curSong = list_entry(curSong->list.next, song_t, list);
     stop();
     play(curSong->name);
 }
@@ -133,9 +134,6 @@ int main(int argc, char *argv[])
 
     char songName[MAX_LEN] = {0};
 
-    add_song("h.mp3", curPlaylist);
-    curSong = list_first_entry(curPlaylist.playListHead, song_t, list);
-    
     while (1)
     {
         char c = getchar();
@@ -149,7 +147,6 @@ int main(int argc, char *argv[])
                 break;
             case 'p':
                 play(curSong->name);
-                printf("next: %s\n", ((song_t *)curSong->list.prev)->name);
                 break;
             case 's':
                 stop();
