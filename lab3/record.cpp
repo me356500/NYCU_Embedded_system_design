@@ -57,100 +57,13 @@ struct framebuffer_info get_framebuffer_info(const char* framebuffer_device_path
     return info;
 };
 
-int screenshot_cnt = 0;
-
-void screenshot(cv::Mat& frame) {
-
-    string filename = "/run/media/mmcblk1p1/screenshot/" + to_string(screenshot_cnt++) + ".bmp";
-
-    // https://docs.opencv.org/3.4/d4/da8/group__imgcodecs.html#gabbc7ef1aa2edfaa87772f1202d67e0ce
-    if (cv::imwrite(filename, frame))
-        cout << "Screenshot : " << filename << '\n';
-    else 
-        cout << "[Error] Screenshot failed : " << filename << '\n';
-
-}
-
-mutex mutex_screenshot;
-bool flag_screenshot = 0, flag_end = 0;
-
-
-void listen_keyboard_terminal() {
-
-    cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
-
-    // https://man7.org/linux/man-pages/man3/termios.3.html
-    // termios noncanonical mode
-    struct termios old_tio, new_tio;
-
-    int echoeflag = ECHOE;
-
-    tcgetattr(STDIN_FILENO, &old_tio);
-    new_tio = old_tio;
-
-    int mossdisable = ICANON | ECHO;
-    // disable canonical
-    new_tio.c_lflag &= (~ICANON);
-
-    tcflush(STDIN_FILENO, TCIFLUSH);
-    int testflag = ICANON;
-    int echoflag = ECHO;
-
-    tcsetattr(STDIN_FILENO, TCSANOW, &new_tio);
-
-    while (1) {
-
-        int key = ' ';
-        if (read(STDIN_FILENO, &key, 1) == 1) {
-            cout << key << '\n';
-        }
-        
-        if (key == 'c') {
-            mutex_screenshot.lock();
-            flag_screenshot = 1;
-            mutex_screenshot.unlock();
-        }
-        else if (key == 27) {
-            flag_end = 1;
-            break;
-        }
-    }
-
-    tcsetattr(STDIN_FILENO, TCSANOW, &old_tio);
-
-}
-
-cv::Size video_size;
-
-int print_frame(cv::Mat& frame, std::ofstream& ofs, struct framebuffer_info& fb_info) {
-
-    cv::Size2f frame_size = frame.size();
-	
- 
-    int fb_width = fb_info.xres_virtual;
-    int pixel_bytes = fb_info.bits_per_pixel / 8;
-
-    for (int i = 0; i < frame_size.height; ++i) {
-        // move ofs to ith row of framebuffer
-        
-        ofs.seekp(i * pixel_bytes * fb_width + 160);
-        // writing row by row
-        // reinterpret : uchar* to char*
-        ofs.write(reinterpret_cast<char*>(frame.ptr(i)), pixel_bytes * frame_size.width);
-    }    
-
-    return 0;
-}
 
 int main(int argc, char **argv) {
 
-    // variable to store the frame get from video stream
     cv::Mat frame;
 
     // open video stream device
     // https://docs.opencv.org/3.4.7/d8/dfe/classcv_1_1VideoCapture.html#a5d5f5dacb77bbebdcbfb341e3d4355c1
-    // camera id ??
-    // camera_id + domain_offset (CAP_*) id of the video capturing device to open.
     cv::VideoCapture camera (2);
 
     // get info of the framebuffer
@@ -180,20 +93,19 @@ int main(int argc, char **argv) {
     camera.set(CV_CAP_PROP_FRAME_HEIGHT, frame_height);
     camera.set(CV_CAP_PROP_FPS, frame_rate);
 
-    // bonus
-    thread t_listen(listen_keyboard_terminal);
-
     // https://docs.opencv.org/3.4/d6/d50/classcv_1_1Size__.html#a45c97e9a4930d73fde11c2acc5f371ac
-    video_size = cv::Size(frame_width, frame_height);
+    cv::Size video_size = cv::Size(frame_width, frame_height);
 
     // motion jpeg
     // if MJPG doesn't work, try (*'XVID)
     int fourcc_code = cv::VideoWriter::fourcc('M', 'J', 'P', 'G'); 
 
+    string record_filename = "/run/media/mmcblk1p1/screenshot/" + argv[1];
+
     // https://docs.opencv.org/3.4/dd/d9e/classcv_1_1VideoWriter.html#af52d129e2430c0287654e7d24e3bbcdc
     // https://docs.opencv.org/3.4/df/d94/samples_2cpp_2videowriter_basic_8cpp-example.html#a5
     // OpenCV supported avi only
-    cv::VideoWriter video("/run/media/mmcblk1p1/screenshot/bonus.avi", fourcc_code, frame_rate, video_size, true);
+    cv::VideoWriter video(record_filename, fourcc_code, frame_rate, video_size, true);
     
     while (1) {
 
@@ -202,26 +114,10 @@ int main(int argc, char **argv) {
         // camera.read
         // https://docs.opencv.org/3.4.7/d8/dfe/classcv_1_1VideoCapture.html#a199844fb74226a28b3ce3a39d1ff6765
         // read next video
-        camera >> frame;
+        camera.read(frame);
 
         // https://docs.opencv.org/3.4/dd/d9e/classcv_1_1VideoWriter.html#a3115b679d612a6a0b5864a0c88ed4b39
-        //video.write(frame);
-
-        if (flag_screenshot) {
-            screenshot(frame);
-            mutex_screenshot.lock();
-            flag_screenshot = 0;
-            mutex_screenshot.unlock();
-        }
-
-        if (flag_end) {
-            cout << "Program End\n";
-            t_listen.join();
-            break;
-        }
-
-        cv::cvtColor(frame, frame, cv::COLOR_BGR2BGR565);
-        print_frame(frame, ofs, fb_info);
+        video.write(frame);
 
     }
 
