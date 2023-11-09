@@ -73,7 +73,7 @@ bool flag_screenshot = 0, flag_end = 0;
 
 void listen_keyboard_terminal() {
 
-    cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
+    //cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
 
     // https://man7.org/linux/man-pages/man3/termios.3.html
     // termios noncanonical mode
