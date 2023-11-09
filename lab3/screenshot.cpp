@@ -62,7 +62,7 @@ int screenshot_cnt = 0;
 void screenshot(cv::Mat& frame) {
 
     string filename = "/run/media/mmcblk1p1/screenshot/" + to_string(screenshot_cnt++) + ".bmp";
-    cv::imwrite(filename, frame)
+    cv::imwrite(filename, frame);
     // https://docs.opencv.org/3.4/d4/da8/group__imgcodecs.html#gabbc7ef1aa2edfaa87772f1202d67e0ce
 
 }
@@ -205,7 +205,6 @@ int main(int argc, char **argv) {
 
     }
 
-    video.release();
     camera.release();
 
     return 0;

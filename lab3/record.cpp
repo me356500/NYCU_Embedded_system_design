@@ -100,7 +100,7 @@ int main(int argc, char **argv) {
     // if MJPG doesn't work, try (*'XVID)
     int fourcc_code = cv::VideoWriter::fourcc('M', 'J', 'P', 'G'); 
 
-    string record_filename = "/run/media/mmcblk1p1/screenshot/" + argv[1];
+    string record_filename = "/run/media/mmcblk1p1/screenshot/" + string(argv[1]);
 
     // https://docs.opencv.org/3.4/dd/d9e/classcv_1_1VideoWriter.html#af52d129e2430c0287654e7d24e3bbcdc
     // https://docs.opencv.org/3.4/df/d94/samples_2cpp_2videowriter_basic_8cpp-example.html#a5
