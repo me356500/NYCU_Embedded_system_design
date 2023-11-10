@@ -1,4 +1,4 @@
-screen:
+all:
 	arm-linux-gnueabihf-g++ lab4.cpp -o lab4 \
 -I /opt/EmbedSky/gcc-linaro-5.3-2016.02-x86_64_arm-linux-gnueabihf/include/ \
 -I /usr/local/arm-opencv/install/include/ -L /usr/local/arm-opencv/install/lib/ \

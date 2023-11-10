@@ -2,7 +2,7 @@ import serial
 import os,sys
 import time
 
-file_name = "b64hello_world"
+file_name = sys.argv[1]
 tty = serial.Serial("/dev/ttyUSB0", 115200, timeout=0.5)
 file_stats = os.stat(file_name)
 

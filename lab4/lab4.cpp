@@ -1,3 +1,4 @@
+#pragma GCC optimize("unroll-loops")
 #include <fcntl.h> 
 #include <fstream>
 #include <linux/fb.h>
@@ -57,20 +58,10 @@ struct framebuffer_info get_framebuffer_info(const char* framebuffer_device_path
     return info;
 };
 
-int screenshot_cnt = 0;
 
-void screenshot(cv::Mat& frame) {
+mutex mutex_mv;
+bool flag_end = 0, mvleft = 0, mvright = 0;;
 
-    string filename = "/run/media/mmcblk1p1/screenshot/" + to_string(screenshot_cnt++) + ".bmp";
-    cv::imwrite(filename, frame);
-    // https://docs.opencv.org/3.4/d4/da8/group__imgcodecs.html#gabbc7ef1aa2edfaa87772f1202d67e0ce
-
-}
-
-mutex mutex_screenshot;
-bool flag_screenshot = 0, flag_end = 0;
-int shift_val = 160;
-bool mvleft = 0, mvright = 0;
 void listen_keyboard_terminal() {
 
     //cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
@@ -103,18 +94,14 @@ void listen_keyboard_terminal() {
         // 480
         
         if (key == 'j') {
-            mutex_screenshot.lock();
+            mutex_mv.lock();
             mvleft = 1;
-            shift_val -= 20;
-            shift_val = max(-480, shift_val);
-            mutex_screenshot.unlock();
+            mutex_mv.unlock();
         }
         if (key == 'l') {
-            mutex_screenshot.lock();
+            mutex_mv.lock();
             mvright = 1;
-            shift_val += 20;
-            shift_val = min(960, shift_val);
-            mutex_screenshot.unlock();
+            mutex_mv.unlock();
         }
         else if (key == 27) {
             flag_end = 1;
@@ -126,88 +113,64 @@ void listen_keyboard_terminal() {
 
 }
 
+framebuffer_info fb_info;
+cv::Mat image;
+cv::Size2f image_size;
 
-
-int print_frame(cv::Mat& frame, std::ofstream& ofs, struct framebuffer_info& fb_info) {
-
-    cv::Size2f frame_size = frame.size();
-	
- 
-    int fb_width = fb_info.xres_virtual;
-    int pixel_bytes = fb_info.bits_per_pixel / 8;
-
-    for (int i = 0; i < frame_size.height; ++i) {
-        // move ofs to ith row of framebuffer
-        
-        ofs.seekp(i * pixel_bytes * fb_width + shift_val);
-        // writing row by row
-        // reinterpret : uchar* to char*
-        ofs.write(reinterpret_cast<char*>(frame.ptr(i)), pixel_bytes * frame_size.width);
-    }    
-
-    return 0;
-}
 
 int main(int argc, char **argv) {
 
-    // variable to store the frame get from video stream
-    cv::Mat frame;
-
     // get info of the framebuffer
-    framebuffer_info fb_info = get_framebuffer_info("/dev/fb0");
+    fb_info = get_framebuffer_info("/dev/fb0");
 
-    // open the framebuffer device
-    // http://www.cplusplus.com/reference/fstream/ofstream/ofstream/
     std::ofstream ofs("/dev/fb0");
-
 
 
     // bonus
     thread t_listen(listen_keyboard_terminal);
 
-    int cvtcode;
-    
-    if (filename.substr(filename.size() - 3) == "bmp") {
-        image = cv::imread(filename, cv::IMREAD_COLOR);
-        cvtcode = cv::COLOR_BGR2BGR565;
-    }
-    else {
-        cout << "png\n";
-        image = cv::imread(filename, cv::IMREAD_UNCHANGED);
-        cvtcode = cv::COLOR_BGRA2BGR565;
-    }
+    // 3840 x 1080
+    image = cv::imread("picture.png", cv::IMREAD_UNCHANGED);
+    cv::cvtColor(image, image, cv::COLOR_BGRA2BGR565);
     
 
-    // opencv mat size
-    image_size = image.size();
-    cout << "img size : " << image_size << '\n';
+    vector<cv::Mat> scrollboard(3, image);
 
-    // BGR to BGR565 (16-bit image)
-    // bmp : no compression using BGR
-    cv::cvtColor(image, image_convert, cvtcode);
+    cv::Mat frame;
+    
+    cv::hconcat(scrollboard, frame);
+
+    // start from middle image
+    int shift = 0;
+
+    /*
+        |        |        |        |
+        |  IMG1  |  IMG2  |  IMG3  |
+        |        |        |        |
+        0      3839      7679     11519
+    */
+
+    // actually concat 2 img is enough XD, mod 3840
 
     while (1) {
 
-        // get video frame from stream
-        // https://docs.opencv.org/3.4.7/d8/dfe/classcv_1_1VideoCapture.html#a473055e77dd7faa4d26d686226b292c1
-        // camera.read
-        // https://docs.opencv.org/3.4.7/d8/dfe/classcv_1_1VideoCapture.html#a199844fb74226a28b3ce3a39d1ff6765
-        // read next video
-
-
 
         if (mvleft) {
-            //screenshot(frame);
-            mutex_screenshot.lock();
+            mutex_mv.lock();
+
+            shift = (shift - 60) % 3840;
+
             mvleft = 0;
-            mutex_screenshot.unlock();
+            mutex_mv.unlock();
         }
 
         if (mvright) {
-            mutex_screenshot.lock();
-            mvright = 0;
-            mutex_screenshot.unlock();
+            mutex_mv.lock();
+            
+            shift = (shift + 60) % 3840;
 
+            mvright = 0;
+            mutex_mv.unlock();
         }
 
         if (flag_end) {
@@ -215,11 +178,18 @@ int main(int argc, char **argv) {
             break;
         }
 
-        print_image(frame, ofs, fb_info);
+        for (int i = 0; i < 1080; ++i) {
+           
+            // ith row of HDMI frame buffer 
+            ofs.seekp(i * 2 * fb_info.xres_virtual);
+
+            // shift the frame pointer
+            // row, column
+            ofs.write(reinterpret_cast<char*>(frame.ptr(i, shift)), 2 * 1920);
+        }    
 
     }
 
-    camera.release();
 
     return 0;
 }

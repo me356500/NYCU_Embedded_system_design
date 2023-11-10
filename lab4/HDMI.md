@@ -1,4 +1,4 @@
-# Lab3
+# Lab4
 
 ## HDMI output
 according to TQIMX6_uboot
@@ -14,6 +14,3 @@ according to TQIMX6_uboot
 
 - Switch fb1 output to others
     - uboot --> 0 --> 3 --> 2 --> (output) --> s --> q
-
-
-## OpenCV build steps

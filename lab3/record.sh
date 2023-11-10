@@ -8,4 +8,4 @@
 # Description:       lab4_bonus
 ### END INIT INFO
 
-LD_LIBRARY_PATH=./run/media/mmcblk1p1/wallpaper/ ./run/media/mmcblk1p1/wallpaper/demo ./run/media/mmcblk1p1/wallpaper/pepe.png 
+LD_LIBRARY_PATH=/run/media/mmcblk1p1/lab3/ /run/media/mmcblk1p1/lab3/record before.avi
