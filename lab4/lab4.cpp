@@ -64,25 +64,17 @@ bool flag_end = 0, mvleft = 0, mvright = 0;;
 
 void listen_keyboard_terminal() {
 
-    //cout << "Press 'c' to screenshot\nPress 'Esc' to end the program\n";
-
     // https://man7.org/linux/man-pages/man3/termios.3.html
     // termios noncanonical mode
     struct termios old_tio, new_tio;
 
-    int echoeflag = ECHOE;
-
     tcgetattr(STDIN_FILENO, &old_tio);
     new_tio = old_tio;
 
-    int mossdisable = ICANON | ECHO;
     // disable canonical
     new_tio.c_lflag &= (~ICANON);
 
     tcflush(STDIN_FILENO, TCIFLUSH);
-    int testflag = ICANON;
-    int echoflag = ECHO;
-
     tcsetattr(STDIN_FILENO, TCSANOW, &new_tio);
 
     while (1) {
@@ -91,8 +83,7 @@ void listen_keyboard_terminal() {
         if (read(STDIN_FILENO, &key, 1) == 1) {
             //cout << key << '\n';
         }
-        // 480
-        
+
         if (key == 'j') {
             mutex_mv.lock();
             mvleft = 1;
@@ -114,7 +105,7 @@ void listen_keyboard_terminal() {
 }
 
 framebuffer_info fb_info;
-cv::Mat image;
+cv::Mat image, frame;
 cv::Size2f image_size;
 
 
@@ -122,9 +113,7 @@ int main(int argc, char **argv) {
 
     // get info of the framebuffer
     fb_info = get_framebuffer_info("/dev/fb0");
-
     std::ofstream ofs("/dev/fb0");
-
 
     // bonus
     thread t_listen(listen_keyboard_terminal);
@@ -133,24 +122,18 @@ int main(int argc, char **argv) {
     image = cv::imread("picture.png", cv::IMREAD_UNCHANGED);
     cv::cvtColor(image, image, cv::COLOR_BGRA2BGR565);
     
-
-    vector<cv::Mat> scrollboard(3, image);
-
-    cv::Mat frame;
-    
-    cv::hconcat(scrollboard, frame);
-
-    // start from middle image
-    int shift = 0;
-
+    vector<cv::Mat> scrollboard(2, image);
     /*
-        |        |        |        |
-        |  IMG1  |  IMG2  |  IMG3  |
-        |        |        |        |
-        0      3839      7679     11519
+        |        |        |
+        |  IMG1  |  IMG2  | 
+        |        |        |
+        0      3839      7679
+        horizontal concat
+        mod 3840
     */
-
-    // actually concat 2 img is enough XD, mod 3840
+    cv::hconcat(scrollboard, frame);
+    
+    int shift = 0;
 
     while (1) {
 
