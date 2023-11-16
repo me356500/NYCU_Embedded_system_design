@@ -59,50 +59,6 @@ struct framebuffer_info get_framebuffer_info(const char* framebuffer_device_path
 };
 
 
-mutex mutex_mv;
-bool flag_end = 0, mvleft = 0, mvright = 0;;
-
-void listen_keyboard_terminal() {
-
-    // https://man7.org/linux/man-pages/man3/termios.3.html
-    // termios noncanonical mode
-    struct termios old_tio, new_tio;
-
-    tcgetattr(STDIN_FILENO, &old_tio);
-    new_tio = old_tio;
-
-    // disable canonical
-    new_tio.c_lflag &= (~ICANON);
-
-    tcflush(STDIN_FILENO, TCIFLUSH);
-    tcsetattr(STDIN_FILENO, TCSANOW, &new_tio);
-
-    while (1) {
-
-        int key = ' ';
-        if (read(STDIN_FILENO, &key, 1) == 1) {
-            //cout << key << '\n';
-        }
-
-        if (key == 'j') {
-            mutex_mv.lock();
-            mvleft = 1;
-            mutex_mv.unlock();
-        }
-        if (key == 'l') {
-            mutex_mv.lock();
-            mvright = 1;
-            mutex_mv.unlock();
-        }
-        else if (key == 27) {
-            flag_end = 1;
-            break;
-        }
-    }
-
-    tcsetattr(STDIN_FILENO, TCSANOW, &old_tio);
-
-}
 
 framebuffer_info fb_info;
 cv::Mat image, frame;
@@ -115,8 +71,6 @@ int main(int argc, char **argv) {
     fb_info = get_framebuffer_info("/dev/fb0");
     std::ofstream ofs("/dev/fb0");
 
-    // bonus
-    thread t_listen(listen_keyboard_terminal);
 
     // 3840 x 1080
     image = cv::imread("picture.png", cv::IMREAD_UNCHANGED);
@@ -135,46 +89,18 @@ int main(int argc, char **argv) {
     
     int shift = 0;
     int step = atoi(argv[1]);
+
     while (1) {
 
-       
         shift = (shift + step) % 3840;
 
-        if (mvleft) {
-            mutex_mv.lock();
-
-            step = step > 0 ? step : step * (-1);
-
-            mvleft = 0;
-            mutex_mv.unlock();
-        }
-
-        if (mvright) {
-            mutex_mv.lock();
-            
-            step = step < 0 ? step : step * (-1);
-
-            mvright = 0;
-            mutex_mv.unlock();
-        }
-
-        if (flag_end) {
-            t_listen.join();
-            break;
-        }
-
         for (int i = 0; i < 1080; ++i) {
-           
-            // ith row of HDMI frame buffer 
+            
             ofs.seekp(i * 2 * fb_info.xres_virtual);
-
-            // shift the frame pointer
-            // row, column
             ofs.write(reinterpret_cast<char*>(frame.ptr(i, shift)), 2 * 1920);
-        }    
-
+        }
+    
     }
-
 
     return 0;
 }
