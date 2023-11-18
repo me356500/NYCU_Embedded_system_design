@@ -116,7 +116,7 @@ void listen_keyboard_terminal() {
 
 }
 
-int start = 0;
+int start = 180;
 int print_frame(cv::Mat& frame, std::ofstream& ofs, struct framebuffer_info& fb_info) {
 
     cv::Size2f frame_size = frame.size();
@@ -126,11 +126,8 @@ int print_frame(cv::Mat& frame, std::ofstream& ofs, struct framebuffer_info& fb_
     int pixel_bytes = fb_info.bits_per_pixel / 8;
 
     for (int i = start; i < frame_size.height + start; ++i) {
-        // move ofs to ith row of framebuffer
-        
+
         ofs.seekp(i * pixel_bytes * fb_width + 640);
-        // writing row by row
-        // reinterpret : uchar* to char*
         ofs.write(reinterpret_cast<char*>(frame.ptr(i - start)), pixel_bytes * frame_size.width);
     }    
 
