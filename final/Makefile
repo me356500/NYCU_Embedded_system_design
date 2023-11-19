@@ -22,3 +22,4 @@ local:
 	-lopencv_imgcodecs \
 	-lopencv_videoio \
 	-lpthread \
+	-lopencv_face \
