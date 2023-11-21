@@ -23,3 +23,19 @@ local:
 	-lopencv_videoio \
 	-lpthread \
 	-lopencv_face \
+
+.PHONY:test
+test:
+	g++ -std=c++11 -o test draft.cpp \
+	-I /usr/include/opencv4 \
+    -L /usr/lib \
+	-lopencv_core \
+	-lopencv_imgproc \
+	-lopencv_highgui \
+	-lopencv_ml \
+	-lopencv_video \
+	-lopencv_objdetect \
+	-lopencv_imgcodecs \
+	-lopencv_videoio \
+	-lpthread \
+	-lopencv_face \

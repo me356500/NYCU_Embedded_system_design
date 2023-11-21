@@ -68,13 +68,23 @@ std::ofstream ofs("/dev/fb0");
 framebuffer_info fb_info;
 
 
-/*-----------------------------------------*/
-// face recognize
+/*-------------------------------------------------*/
 
-vector<Rect> faces, eyes;
+vector<Rect> faces, eyes, noses;
 Mat faceROI;
 
+
 CascadeClassifier face_cascade, eye_cascade, nose_cascade;
+
+double scaleFactor = 1.1;
+int minNeighbors = 10;
+int flags = (0 | CASCADE_SCALE_IMAGE);
+
+int nose_flags = (0 | CASCADE_FIND_BIGGEST_OBJECT);
+
+Size faceSize(35, 35);
+Size eyeSize(5, 5);
+Size noseSize(5, 5);
 
 // id, -->  <precision, name>
 unordered_map<int, pair<int, string>> student;
@@ -82,8 +92,8 @@ unordered_map<int, pair<int, string>> student;
 // train model
 string train_model_path = "./trained_faces.xml";
 
-/*-----------------------------------------*/
 
+/*----------------------------------------------------*/
 
 void print_frame(Mat &frame) {
 
@@ -96,46 +106,83 @@ void print_frame(Mat &frame) {
 
 }
 
-void detect(Mat &frame) {
+void detect_frame(Mat &frame, Mat &cvt_frame, int i) {
 
-    face_cascade.detectMultiScale(frame, faces, 1.1, 4, 0 | CASCADE_SCALE_IMAGE, Size(35, 35));
+
+    int h = faces[i].y + faces[i].height;
+    int w = faces[i].x + faces[i].width;
+
+    // mark face
+    rectangle(cvt_frame, Point(faces[i].x, faces[i].y), 
+        Point(w, h), Scalar(0, 255, 0), 2, 8, 0);
+
+    faceROI = frame(faces[i]);
+    
+    eye_cascade.detectMultiScale(faceROI, eyes, scaleFactor, minNeighbors, flags, eyeSize);
+    
+
+    // prevent detecting noses
+    sort(eyes.begin(), eyes.end(),
+        [](const Rect &l, const Rect &r) {
+            return l.y < r.y;
+        });
+    
+    int eyes_y = -1;
+
+    if (eyes.size())
+        eyes_y = eyes[0].y;
+
+    // mark eyes
+    for (int j = 0; j < min((int)eyes.size(), 2); ++j) {
+        
+        Point center(faces[i].x + eyes[j].x + eyes[j].width * 0.5, 
+                faces[i].y + eyes[j].y + eyes[j].height * 0.5);
+        
+        int r = cvRound((eyes[j].width + eyes[j].height) * 0.25);
+        
+        circle(cvt_frame, center, r, Scalar(255, 0, 0), 4, 8, 0);
+    }
+
+    nose_cascade.detectMultiScale(faceROI, noses, scaleFactor, minNeighbors, nose_flags, noseSize);
+
+    // mark noses
+    for (int j = 0; j < noses.size(); ++j) {
+        
+        if (~eyes_y && eyes_y >= noses[j].y)
+            continue;
+
+        Point center(faces[i].x + noses[j].x + noses[j].width * 0.5, 
+                faces[i].y + noses[j].y + noses[j].height * 0.5);
+        
+        int r = cvRound((noses[j].width + noses[j].height) * 0.25);
+        
+        circle(cvt_frame, center, r, Scalar(0, 0, 255), 4, 8, 0);
+    }
+
+
+}
+
+void detect(Mat &frame, Mat &cvt_frame) {
+
+    cvt_frame = frame;
+
+    cvtColor(frame, frame, COLOR_BGR2GRAY);
+    face_cascade.detectMultiScale(frame, faces, scaleFactor, minNeighbors, flags, faceSize);
 
     for (int i = 0; i < faces.size(); ++i) {
 
-        // faces
-        int h = faces[i].y + faces[i].height;
-        int w = faces[i].x + faces[i].width;
-
-        rectangle(frame, Point(faces[i].x, faces[i].y), 
-            Point(w, h), Scalar(0, 255, 0), 2, 8, 0); 
-        
-        // eyes
-        faceROI = frame(faces[i]);
-        eye_cascade.detectMultiScale(faceROI, eyes, 1.1, 4, 0 | CASCADE_SCALE_IMAGE, Size(5, 5));
-
-        for (int j = 0; j < eyes.size(); ++j) {
-            
-            Point center(faces[i].x + eyes[j].x + eyes[j].width * 0.5, 
-                    faces[i].y + eyes[j].y + eyes[j].height * 0.5);
-            
-            int r = cvRound((eyes[j].width + eyes[j].height) * 0.25);
-            
-            circle(frame, center, r, Scalar(255, 0, 0), 4, 8, 0);
-        }
+        detect_frame(frame, cvt_frame, i);
     }
-
-    eyes.clear();
-    faces.clear();
 
 }
 
 void train(VideoCapture &camera, Mat &frame) {
 
     Ptr<FaceRecognizer> train_model = LBPHFaceRecognizer::create();
-    Mat faceROI;
+    Mat cvt_frame;
 
-    string name, student_id;
-    int trained_id, training_frame, persons;
+    string name;
+    int trained_id, training_frame, persons, student_id;
     double precision;
 
     vector<Mat> images;
@@ -159,33 +206,40 @@ void train(VideoCapture &camera, Mat &frame) {
 
             camera.read(frame);
 
+            cvt_frame = frame;
+
             cvtColor(frame, frame, COLOR_BGR2GRAY);
-            face_cascade.detectMultiScale(frame, faces, 1.1, 3, 0 | CASCADE_SCALE_IMAGE, Size(35, 35));
+
+            face_cascade.detectMultiScale(frame, faces, scaleFactor, minNeighbors, nose_flags, faceSize);
             
             if (faces.size()) {
-                cout << faces[i].x << ", " << faces[i].y << "\n";
 
-                faceROI = frame(faces[i]);
-                
+                // process
+                detect_frame(frame, cvt_frame, 0);
+
+                // training data
                 images.emplace_back(faceROI);
-                labels.emplace_back(persons);
+                labels.emplace_back(student_id);
+
+                putText(cvt_frame, "training", Point(faces[0].x, faces[0].y),
+                    FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 0), 2);
 
             }
+            
+            print_frame(cvt_frame);
 
         }
-       
 
         train_model->update(images, labels);
+        //train_model->train(images, labels);
         train_model->save(train_model_path);
 
         faceROI = frame(faces[0]);
-        train_model->predict(faceROI, persons, precision);
+        train_model->predict(faceROI, student_id, precision);
         
-        student[persons] = make_pair(precision, name);
+        student[student_id] = make_pair(precision, name);
 
-        faces.clear();
     }
-
 
 }
 
@@ -198,8 +252,8 @@ void recognize(VideoCapture &camera, Mat &frame) {
     int label, range;
     string message;
 
-    cout << "Enter range : ";
-    cin >> range;
+    //cout << "Enter range : ";
+    //cin >> range;
 
     while (1) {
 
@@ -210,34 +264,22 @@ void recognize(VideoCapture &camera, Mat &frame) {
 
         // compare
         cvtColor(frame, frame, COLOR_BGR2GRAY);
-        face_cascade.detectMultiScale(frame, faces, 1.1, 3, 0 | CASCADE_SCALE_IMAGE, Size(35, 35));
+        face_cascade.detectMultiScale(frame, faces, scaleFactor, minNeighbors, flags, faceSize);
         
         for (int i = 0; i < faces.size(); ++i) {
 
-            // faces
-            int h = faces[i].y + faces[i].height;
-            int w = faces[i].x + faces[i].width;
-
-            rectangle(cvt_frame, Point(faces[i].x, faces[i].y), 
-                Point(w, h), Scalar(0, 255, 0), 2, 8, 0);
-
-            faceROI = frame(faces[i]);
+            detect_frame(frame, cvt_frame, i);
 
             label = train_model->predict(faceROI);
             train_model->predict(faceROI, label, precision);
             
-            message = "unknown";
-
-            if (precision > student[label].first + range)
-                message = student[label].second;
+            message = student[label].second + " : " + to_string(precision - student[label].first);
 
             putText(cvt_frame, message, Point(faces[i].x, faces[i].y),
                 FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 0), 2);
-
+            
         }
-
-        faces.clear();
-         
+        
         print_frame(cvt_frame);
 
     }
@@ -246,7 +288,7 @@ void recognize(VideoCapture &camera, Mat &frame) {
 int main(int argc, char **argv) {
 
 
-    cv::Mat frame;
+    cv::Mat frame, cvt_frame;
 
     cv::VideoCapture camera (2);
 
@@ -271,9 +313,12 @@ int main(int argc, char **argv) {
     // load detector
     face_cascade.load("./haarcascades/haarcascade_frontalface_alt.xml");
     eye_cascade.load("./haarcascades/haarcascade_eye_tree_eyeglasses.xml");
+    nose_cascade.load("./haarcascades/haarcascade_mcs_nose.xml");
 
 
     int control = atoi(argv[4]);
+
+    minNeighbors = atoi(argv[5]);
 
     if (control == 1) {
 
@@ -281,9 +326,9 @@ int main(int argc, char **argv) {
 
             camera.read(frame);
 
-            detect(frame);
+            detect(frame, cvt_frame);
 
-            print_frame(frame);
+            print_frame(cvt_frame);
 
         }
 
@@ -295,8 +340,6 @@ int main(int argc, char **argv) {
         recognize(camera, frame);
 
     }
-
-    
 
     camera.release();
 

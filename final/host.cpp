@@ -20,58 +20,114 @@ using namespace std;
 using namespace cv;
 using namespace cv::face;
 
-vector<Rect> faces, eyes;
+
+
+/*-------------------------------------------------*/
+
+vector<Rect> faces, eyes, noses;
 Mat faceROI;
+
 
 CascadeClassifier face_cascade, eye_cascade, nose_cascade;
 
-// id, -->  <precision, name>
+double scaleFactor = 1.1;
+int minNeighbors = 10;
+int flags = (0 | CASCADE_SCALE_IMAGE);
+int nose_flags = (0 | CASCADE_FIND_BIGGEST_OBJECT);
+
+Size faceSize(35, 35);
+Size eyeSize(5, 5);
+Size noseSize(5, 5);
+
+// student_id, -->  <precision, name>
 unordered_map<int, pair<int, string>> student;
 
 // train model
 string train_model_path = "./trained_faces.xml";
 
 
-void detect(Mat &frame) {
+/*----------------------------------------------------*/
 
-    face_cascade.detectMultiScale(frame, faces, 1.1, 2, 0 | CASCADE_SCALE_IMAGE, Size(35, 35));
+void detect_frame(Mat &frame, Mat &cvt_frame, int i) {
+
+
+    int h = faces[i].y + faces[i].height;
+    int w = faces[i].x + faces[i].width;
+
+    // mark face
+    rectangle(cvt_frame, Point(faces[i].x, faces[i].y), 
+        Point(w, h), Scalar(0, 255, 0), 2, 8, 0);
+
+    faceROI = frame(faces[i]);
+    
+    eye_cascade.detectMultiScale(faceROI, eyes, scaleFactor, minNeighbors, flags, eyeSize);
+    
+
+    // prevent detecting noses
+    sort(eyes.begin(), eyes.end(),
+        [](const Rect &l, const Rect &r) {
+            return l.y < r.y;
+        });
+    
+    int eyes_y = -1;
+
+    if (eyes.size())
+        eyes_y = eyes[0].y;
+
+    // mark eyes
+    for (int j = 0; j < min((int)eyes.size(), 2); ++j) {
+        
+        Point center(faces[i].x + eyes[j].x + eyes[j].width * 0.5, 
+                faces[i].y + eyes[j].y + eyes[j].height * 0.5);
+        
+        int r = cvRound((eyes[j].width + eyes[j].height) * 0.25);
+        
+        circle(cvt_frame, center, r, Scalar(255, 0, 0), 4, 8, 0);
+    }
+
+    nose_cascade.detectMultiScale(faceROI, noses, scaleFactor, minNeighbors, nose_flags, noseSize);
+
+    // mark noses
+    for (int j = 0; j < noses.size(); ++j) {
+        
+        if (~eyes_y && eyes_y >= noses[j].y)
+            continue;
+
+        Point center(faces[i].x + noses[j].x + noses[j].width * 0.5, 
+                faces[i].y + noses[j].y + noses[j].height * 0.5);
+        
+        int r = cvRound((noses[j].width + noses[j].height) * 0.25);
+        
+        circle(cvt_frame, center, r, Scalar(0, 0, 255), 4, 8, 0);
+    }
+
+
+}
+
+
+void detect(Mat &frame, Mat &cvt_frame) {
+
+    cvt_frame = frame;
+
+    cvtColor(frame, frame, COLOR_BGR2GRAY);
+    face_cascade.detectMultiScale(frame, faces, scaleFactor, minNeighbors, flags, faceSize);
 
     for (int i = 0; i < faces.size(); ++i) {
 
-        // faces
-        int h = faces[i].y + faces[i].height;
-        int w = faces[i].x + faces[i].width;
-
-        rectangle(frame, Point(faces[i].x, faces[i].y), 
-            Point(w, h), Scalar(0, 255, 0), 2, 8, 0); 
-        
-        // eyes
-        faceROI = frame(faces[i]);
-        eye_cascade.detectMultiScale(faceROI, eyes, 1.1, 2, 0 | CASCADE_SCALE_IMAGE, Size(5, 5));
-
-        for (int j = 0; j < eyes.size(); ++j) {
-            
-            Point center(faces[i].x + eyes[j].x + eyes[j].width * 0.5, 
-                    faces[i].y + eyes[j].y + eyes[j].height * 0.5);
-            
-            int r = cvRound((eyes[j].width + eyes[j].height) * 0.25);
-            
-            circle(frame, center, r, Scalar(255, 0, 0), 4, 8, 0);
-        }
+        detect_frame(frame, cvt_frame, i);
     }
 
-    eyes.clear();
-    faces.clear();
-
 }
+
+
 
 void train(VideoCapture &camera, Mat &frame) {
 
     Ptr<FaceRecognizer> train_model = LBPHFaceRecognizer::create();
-    Mat faceROI;
+    Mat cvt_frame;
 
-    string name, student_id;
-    int trained_id, training_frame, persons;
+    string name;
+    int training_frame, persons, student_id;
     double precision;
 
     vector<Mat> images;
@@ -91,39 +147,56 @@ void train(VideoCapture &camera, Mat &frame) {
         cout << "Enter number of training frame : ";
         cin >> training_frame;
 
+        namedWindow("training", WINDOW_KEEPRATIO);
+        resizeWindow("training", 800, 800); 
+
         for (int i = 0; i < training_frame; ++i) {
 
             camera.read(frame);
 
+            cvt_frame = frame;
+
             cvtColor(frame, frame, COLOR_BGR2GRAY);
-            face_cascade.detectMultiScale(frame, faces, 1.1, 3, 0 | CASCADE_SCALE_IMAGE, Size(35, 35));
-            
+
+            face_cascade.detectMultiScale(frame, faces, scaleFactor, minNeighbors, nose_flags, faceSize);
             
             if (faces.size()) {
-                cout << faces[i].x << ", " << faces[i].y << "\n";
 
-                faceROI = frame(faces[i]);
-                
+                // process
+                detect_frame(frame, cvt_frame, 0);
+
+                // training data
                 images.emplace_back(faceROI);
-                labels.emplace_back(persons);
+                labels.emplace_back(student_id);
+
+                putText(cvt_frame, "training", Point(faces[0].x, faces[0].y),
+                    FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 0), 2);
 
             }
+            
+
+            imshow("training", cvt_frame);
+            
+
+            if (waitKey(10) == 27)
+                break;
 
         }
 
        
 
         train_model->update(images, labels);
+        //train_model->train(images, labels);
         train_model->save(train_model_path);
 
         faceROI = frame(faces[0]);
-        train_model->predict(faceROI, persons, precision);
+        train_model->predict(faceROI, student_id, precision);
         
-        student[persons] = make_pair(precision, name);
+        student[student_id] = make_pair(precision, name);
 
-        faces.clear();
     }
 
+    destroyWindow("training");
 
 }
 
@@ -133,53 +206,42 @@ void recognize(VideoCapture &camera, Mat &frame) {
 
     Mat cvt_frame, frameROI;
     double precision;
-    int label, range;
+    int student_id, range;
     string message;
 
-    cout << "Enter range : ";
-    cin >> range;
+    //cout << "Enter range : ";
+    //cin >> range;
+
+    namedWindow("face detection", WINDOW_KEEPRATIO);
+    resizeWindow("face detection", 800, 800); 
 
     while (1) {
 
         camera.read(frame);
 
         // output
-        //cvtColor(frame, cvt_frame, COLOR_BGR2BGR565);
         cvt_frame = frame;
         // compare
         cvtColor(frame, frame, COLOR_BGR2GRAY);
-        face_cascade.detectMultiScale(frame, faces, 1.1, 3, 0 | CASCADE_SCALE_IMAGE, Size(35, 35));
+        face_cascade.detectMultiScale(frame, faces, scaleFactor, minNeighbors, flags, faceSize);
         
-
-
         for (int i = 0; i < faces.size(); ++i) {
 
-            // faces
-            int h = faces[i].y + faces[i].height;
-            int w = faces[i].x + faces[i].width;
+            detect_frame(frame, cvt_frame, i);
 
-            rectangle(cvt_frame, Point(faces[i].x, faces[i].y), 
-                Point(w, h), Scalar(0, 255, 0), 2, 8, 0);
-
-            faceROI = frame(faces[i]);
-
-            label = train_model->predict(faceROI);
-            train_model->predict(faceROI, label, precision);
+            student_id = train_model->predict(faceROI);
+            train_model->predict(faceROI, student_id, precision);
             
-            message = "unknown";
-
-            if (precision > student[label].first + range)
-                message = student[label].second;
+            if (!student.count(student_id))
+                message = "not matched";
+            else 
+                message = student[student_id].second + " : " + to_string(precision - student[student_id].first);
 
             putText(cvt_frame, message, Point(faces[i].x, faces[i].y),
                 FONT_HERSHEY_SIMPLEX, 2, Scalar(255, 255, 0), 2);
             
-
-
         }
-
-        faces.clear();
-         
+        
         imshow("face detection", cvt_frame); 
 
         if (waitKey(1) == 27)
@@ -190,7 +252,7 @@ void recognize(VideoCapture &camera, Mat &frame) {
 
 int main(int argc, char **argv) {
 
-    Mat frame;
+    Mat frame, cvt_frame;
 
     cv::VideoCapture camera (0);
 
@@ -202,14 +264,31 @@ int main(int argc, char **argv) {
     // detector
     face_cascade.load("./haarcascades/haarcascade_frontalface_alt.xml");
     eye_cascade.load("./haarcascades/haarcascade_eye_tree_eyeglasses.xml");
+    nose_cascade.load("./haarcascades/haarcascade_mcs_nose.xml");
 
 
+    namedWindow("test", WINDOW_KEEPRATIO);
+    resizeWindow("test", 800, 800);
 
-    //while (1) {
+    while (1) {
 
-        train(camera, frame);
-        recognize(camera, frame);
-    //}
+        camera.read(frame);
+        
+        detect(frame, cvt_frame);
+
+        imshow("test", cvt_frame);
+
+        if (waitKey(10) == 27)
+            break;
+
+    }
+
+    destroyWindow("test");
+
+    
+    train(camera, frame);
+    recognize(camera, frame);
+
 
     camera.release();
 
