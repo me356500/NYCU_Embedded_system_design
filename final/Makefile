@@ -24,9 +24,9 @@ local:
 	-lpthread \
 	-lopencv_face \
 
-.PHONY:test
-test:
-	g++ -std=c++11 -o test draft.cpp \
+.PHONY:emo
+emo:
+	g++ -std=c++17 -o test emotion_detect.cpp \
 	-I /usr/include/opencv4 \
     -L /usr/lib \
 	-lopencv_core \
@@ -39,3 +39,4 @@ test:
 	-lopencv_videoio \
 	-lpthread \
 	-lopencv_face \
+	-lopencv_dnn \

@@ -100,7 +100,7 @@ void print_frame(Mat &frame) {
     cvtColor(frame, frame, COLOR_BGR2BGR565);
 
     for (int i = start; i < frame_height + start; ++i) {
-        ofs.seekp(i * 2 * fb_info.xres_virtual + 640);
+        ofs.seekp(i * 2 * fb_info.xres_virtual);
         ofs.write(reinterpret_cast<char *>(frame.ptr(i - start)), 2 * frame_width);
     }
 
@@ -115,6 +115,8 @@ void detect_frame(Mat &frame, Mat &cvt_frame, int i) {
     // mark face
     rectangle(cvt_frame, Point(faces[i].x, faces[i].y), 
         Point(w, h), Scalar(0, 255, 0), 2, 8, 0);
+
+#ifdef EYES
 
     faceROI = frame(faces[i]);
     
@@ -143,6 +145,9 @@ void detect_frame(Mat &frame, Mat &cvt_frame, int i) {
         circle(cvt_frame, center, r, Scalar(255, 0, 0), 4, 8, 0);
     }
 
+#endif
+
+#ifdef NOSES
     nose_cascade.detectMultiScale(faceROI, noses, scaleFactor, minNeighbors, nose_flags, noseSize);
 
     // mark noses
@@ -159,6 +164,7 @@ void detect_frame(Mat &frame, Mat &cvt_frame, int i) {
         circle(cvt_frame, center, r, Scalar(0, 0, 255), 4, 8, 0);
     }
 
+#endif
 
 }
 
@@ -304,7 +310,7 @@ int main(int argc, char **argv) {
     frame_height = atof(argv[2]);
     frame_rate = 30.0;
 
-    start = atoi(argv[3]);
+    start = 0;
     camera.set(CV_CAP_PROP_FRAME_WIDTH, frame_width);
     camera.set(CV_CAP_PROP_FRAME_HEIGHT, frame_height);
     camera.set(CV_CAP_PROP_FPS, frame_rate);
@@ -316,9 +322,12 @@ int main(int argc, char **argv) {
     nose_cascade.load("./haarcascades/haarcascade_mcs_nose.xml");
 
 
-    int control = atoi(argv[4]);
+    int control = atoi(argv[3]);
 
-    minNeighbors = atoi(argv[5]);
+    minNeighbors = atoi(argv[4]);
+
+    scaleFactor = atof(argv[5]);
+
 
     if (control == 1) {
 
