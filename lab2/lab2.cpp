@@ -40,6 +40,7 @@ struct framebuffer_info get_framebuffer_info(const char* framebuffer_device_path
         FBIOGET_FSCREENINFO：get framebuffer fix info
     
     */
+   
     else if (!ioctl(fd, FBIOGET_VSCREENINFO, &screen_info)) {
         info.xres_virtual = screen_info.xres_virtual;
         info.bits_per_pixel = screen_info.bits_per_pixel;
