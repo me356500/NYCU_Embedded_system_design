@@ -285,7 +285,7 @@ int main(int argc, char **argv) {
 
     destroyWindow("test");
 
-    
+        
     train(camera, frame);
     recognize(camera, frame);
 

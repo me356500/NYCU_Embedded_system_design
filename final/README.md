@@ -12,6 +12,20 @@
 3. add entry 把要的 flag 加上去打勾, 我只用到 `face` 這個 module
 ```
 BUILD_opencv_legacy=OFF
-BUILD_opencv_face
+BUILD_opencv_face=ON
+
 ```
 - 編的時候有遇到錯的 module, 但我忘記是哪一個, 直接加上他的 flag 然後 disable 就編的過了
+```
+BUILD_opencv_cvv=OFF
+```
+- GLES3/gl3.h : No such file or directory
+    - Undefine GLES3/gl3.h
+
+## dnn build
+
+1. protobuf issue
+    - rm /usr/bin/protoc
+    - cp newer version protoc to /usr/bin
+
+2. cmake enable protobuf and dnn
