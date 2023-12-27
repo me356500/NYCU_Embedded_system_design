@@ -29,3 +29,17 @@ BUILD_opencv_cvv=OFF
     - cp newer version protoc to /usr/bin
 
 2. cmake enable protobuf and dnn
+
+## 112_Project usage
+
+```shell
+# real-time
+LD_LIBRARY_PATH=. ./demo 1280 720 1 config/yolov3-tiny.cfg config/yolov3-tiny.weights 160 0.1 0.1 0.1
+
+# 12 items ~= 2m30s
+time LD_LIBRARY_PATH=. ./performance 0.1 0.1 0.1 config/yolov3.cfg config/yolov3.weights 0 416
+
+# class wide performance ~= 15 second
+time LD_LIBRARY_PATH=. ./performance 0.1 0.1 0.1 config/yolov3.cfg config/yolov3.weights 0 128
+
+```

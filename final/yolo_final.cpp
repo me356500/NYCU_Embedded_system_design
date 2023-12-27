@@ -52,23 +52,23 @@ struct framebuffer_info get_framebuffer_info(const char* framebuffer_device_path
 
 /*-----------------------------------------*/
 // center video
-int start;
+int start_frame;
 
 double frame_width, frame_height, frame_rate;
 
 std::ofstream ofs("/dev/fb0");
 framebuffer_info fb_info;
 
-
+vector<string> class_list;
 /*-------------------------------------------------*/
 
 void print_frame(Mat &frame) {
 
     cvtColor(frame, frame, COLOR_BGR2BGR565);
 
-    for (int i = start; i < frame_height + start; ++i) {
+    for (int i = start_frame; i < frame_height + start_frame; ++i) {
         ofs.seekp(i * 2 * fb_info.xres_virtual);
-        ofs.write(reinterpret_cast<char *>(frame.ptr(i - start)), 2 * frame_width);
+        ofs.write(reinterpret_cast<char *>(frame.ptr(i - start_frame)), 2 * frame_width);
     }
 
 }
@@ -78,8 +78,8 @@ const vector<Scalar> colors = {Scalar(255, 255, 0), Scalar(0, 255, 0),
 
 float INPUT_WIDTH = 640.0;
 float INPUT_HEIGHT = 640.0;
-const float SCORE_THRESHOLD = 0.2;
-const float NMS_THRESHOLD = 0.4;
+float SCORE_THRESHOLD = 0.2;
+float NMS_THRESHOLD = 0.4;
 float CONFIDENCE_THRESHOLD = 0.4;
 
 struct Detection
@@ -167,12 +167,100 @@ void detect(Mat &image, Net &net, vector<Detection> &output, const vector<string
     }
 }
 
+// Draw the predicted bounding box
+void drawPred(int classId, float conf, int left, int top, int right, int bottom, Mat& frame)
+{
+    //Draw a rectangle displaying the bounding box
+    rectangle(frame, Point(left, top), Point(right, bottom), Scalar(255, 178, 50), 3);
+    
+    //Get the label for the class name and its confidence
+    string label = format("%.2f", conf);
+    if (!class_list.empty())
+    {
+        CV_Assert(classId < (int)class_list.size());
+        label = class_list[classId] + ":" + label;
+    }
+    
+    //Display the label at the top of the bounding box
+    int baseLine;
+    Size labelSize = getTextSize(label, FONT_HERSHEY_SIMPLEX, 0.5, 1, &baseLine);
+    top = max(top, labelSize.height);
+    rectangle(frame, Point(left, top - round(1.5*labelSize.height)), Point(left + round(1.5*labelSize.width), top + baseLine), Scalar(255, 255, 255), FILLED);
+    putText(frame, label, Point(left, top), FONT_HERSHEY_SIMPLEX, 0.75, Scalar(0,0,0),1);
+}
+
+void postprocess(Mat& frame, const vector<Mat>& outs)
+{
+    vector<int> classIds;
+    vector<float> confidences;
+    vector<Rect> boxes;
+    
+    for (size_t i = 0; i < outs.size(); ++i)
+    {
+        // Scan through all the bounding boxes output from the network and keep only the
+        // ones with high confidence scores. Assign the box's class label as the class
+        // with the highest score for the box.
+        float* data = (float*)outs[i].data;
+        for (int j = 0; j < outs[i].rows; ++j, data += outs[i].cols)
+        {
+            Mat scores = outs[i].row(j).colRange(5, outs[i].cols);
+            Point classIdPoint;
+            double confidence;
+            // Get the value and location of the maximum score
+            minMaxLoc(scores, 0, &confidence, 0, &classIdPoint);
+            if (confidence > CONFIDENCE_THRESHOLD)
+            {
+                int centerX = (int)(data[0] * frame.cols);
+                int centerY = (int)(data[1] * frame.rows);
+                int width = (int)(data[2] * frame.cols);
+                int height = (int)(data[3] * frame.rows);
+                int left = centerX - width / 2;
+                int top = centerY - height / 2;
+                
+                classIds.emplace_back(classIdPoint.x);
+                confidences.emplace_back((float)confidence);
+                boxes.emplace_back(Rect(left, top, width, height));
+            }
+        }
+    }
+        // Perform non maximum suppression to eliminate redundant overlapping boxes with
+    // lower confidences
+    vector<int> indices;
+    NMSBoxes(boxes, confidences, CONFIDENCE_THRESHOLD, NMS_THRESHOLD, indices);
+    for (size_t i = 0; i < indices.size(); ++i)
+    {
+        int idx = indices[i];
+        Rect box = boxes[idx];
+        drawPred(classIds[idx], confidences[idx], box.x, box.y,
+                 box.x + box.width, box.y + box.height, frame);
+    }
+}
+
+vector<String> getOutsname(const Net& net) {
+
+    static vector<String> names;
+
+    if (names.empty()) {
+        
+        vector<int> outLayer = net.getUnconnectedOutLayers();
+
+        vector<String> layersname = net.getLayerNames();
+
+        names.resize(outLayer.size());
+
+        for (int i = 0; i < outLayer.size(); ++i)
+            names[i] = layersname[outLayer[i] - 1];
+    }
+
+    return names;
+}
+
 int main(int argc, char **argv) {
 
-    Mat frame, cvt_frame;
+    Mat frame, cvt_frame, blob;
     VideoCapture camera(2);
 
-    fb_info = get_framebuffer_info("dev/fb0");
+    fb_info = get_framebuffer_info("/dev/fb0");
 
     if (!camera.isOpened()) {
         std::cerr << "Could not open camera.\n";
@@ -184,21 +272,15 @@ int main(int argc, char **argv) {
     frame_height = atof(argv[2]);
     frame_rate = atof(argv[3]);
 
-    start = 0;
+    start_frame = 0;
     camera.set(CV_CAP_PROP_FRAME_WIDTH, frame_width);
     camera.set(CV_CAP_PROP_FRAME_HEIGHT, frame_height);
     camera.set(CV_CAP_PROP_FPS, frame_rate);
 
     // opencv related
 
-
-
-    /*----------------------------------------*/
-
-    vector<string> class_list;
-
     // class list 
-    ifstream ifs("config/classes.txt");
+    ifstream ifs("./config/classes.txt");
     string line;
     while (getline(ifs, line)) {
         class_list.emplace_back(line);
@@ -206,25 +288,38 @@ int main(int argc, char **argv) {
 
 
     // load net
-    cv::dnn::Net net = readNet("config/yolov5s.onnx");
+#ifdef ONNX
+    cv::dnn::Net net = readNet(argv[4]);
     net.setPreferableBackend(DNN_BACKEND_OPENCV);
     net.setPreferableTarget(DNN_TARGET_CPU);
 
+#else
+    cv::dnn::Net net = cv::dnn::readNetFromDarknet(argv[4], argv[5]);
+    net.setPreferableBackend(cv::dnn::DNN_BACKEND_OPENCV);
+    net.setPreferableTarget(cv::dnn::DNN_TARGET_CPU);
 
-    auto start = std::chrono::high_resolution_clock::now();
-    int frame_count = 0,  total_frames = 0;
-    float fps = -1;
+    int detect_size = atoi(argv[6]);
+
+    SCORE_THRESHOLD = atof(argv[7]);
+    NMS_THRESHOLD = atof(argv[8]);
+    CONFIDENCE_THRESHOLD = atof(argv[9]);
+
+    //auto model = cv::dnn::DetectionModel(net);
+    //model.setInputParams(1./255, cv::Size(416, 416), cv::Scalar(), true);
+
+#endif
+    //auto start = std::chrono::high_resolution_clock::now();
+
 
     while (true) {
 
         camera.read(frame);
 
+ 
 
+#ifdef ONNX
         vector<Detection> output;
         detect(frame, net, output, class_list);
-
-        frame_count++;
-        total_frames++;
 
         int detections = output.size();
 
@@ -258,6 +353,22 @@ int main(int argc, char **argv) {
                             FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 255), 2);
         }
 
+
+#else
+
+        blobFromImage(frame, blob, 1 / 255.0, Size(detect_size, detect_size), Scalar(0, 0, 0), true, false);
+        net.setInput(blob);
+
+        vector<Mat> outs;
+        net.forward(outs, getOutsname(net));
+        
+        postprocess(frame, outs);
+
+
+#endif
+       
+
+        
         print_frame(frame);
 
        
